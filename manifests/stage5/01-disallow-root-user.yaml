@@ -1,0 +1,32 @@
+# Blocks any pod that doesn't explicitly declare it runs as a non-root user.
+# This is the exact gap our vulnerable-webapp deployment had (Stage 2) —
+# no securityContext at all, so it defaulted to root.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-root-user
+  annotations:
+    policies.kyverno.io/title: Disallow Root User
+    policies.kyverno.io/description: >-
+      Containers must explicitly set runAsNonRoot: true. Prevents pods from
+      running as root by default, which was the misconfiguration in Stage 2.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Containers must set securityContext.runAsNonRoot: true"
+        pattern:
+          spec:
+            =(securityContext):
+              runAsNonRoot: "true"
+            containers:
+              - name: "*"
+                securityContext:
+                  runAsNonRoot: "true"

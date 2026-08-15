@@ -1,0 +1,45 @@
+# --- MORE MISCONFIGURATIONS, layered on top of the RBAC issue ---
+# 1. No securityContext -> container runs as root (uid 0) by default
+# 2. No resource requests/limits -> this pod could starve the whole node
+# 3. Uses webapp-sa -> inherits the overly broad secret-reading permissions
+# 4. automountServiceAccountToken defaults to true -> the pod automatically
+#    gets a token file it can use to talk to the Kubernetes API as webapp-sa,
+#    without us doing anything extra. This is what makes the exploit possible
+#    from inside the pod with just `wget`.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vulnerable-webapp
+  namespace: vulnerable-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vulnerable-webapp
+  template:
+    metadata:
+      labels:
+        app: vulnerable-webapp
+    spec:
+      serviceAccountName: webapp-sa
+      containers:
+        - name: webapp
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vulnerable-webapp-svc
+  namespace: vulnerable-app
+spec:
+  type: NodePort
+  selector:
+    app: vulnerable-webapp
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080

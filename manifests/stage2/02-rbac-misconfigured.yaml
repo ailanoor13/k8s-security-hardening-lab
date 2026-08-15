@@ -1,0 +1,36 @@
+# --- THE MISCONFIGURATION ---
+# This ServiceAccount is meant for a simple web app that has no legitimate
+# reason to read Kubernetes Secrets at all, let alone in other namespaces.
+# But the ClusterRole below grants it get/list/watch on secrets CLUSTER-WIDE
+# (via ClusterRoleBinding, not a namespace-scoped RoleBinding) — a classic
+# real-world over-permissioning mistake. We'll exploit this in Stage 3.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webapp-sa
+  namespace: vulnerable-app
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: webapp-overly-broad-role
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: webapp-overly-broad-binding
+subjects:
+  - kind: ServiceAccount
+    name: webapp-sa
+    namespace: vulnerable-app
+roleRef:
+  kind: ClusterRole
+  name: webapp-overly-broad-role
+  apiGroup: rbac.authorization.k8s.io
