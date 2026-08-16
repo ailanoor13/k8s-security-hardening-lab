@@ -110,7 +110,7 @@ $ kubectl exec -it -n vulnerable-app deploy/vulnerable-webapp -- sh
   https://kubernetes.default.svc/api/v1/namespaces/victim-app/secrets/payments-db-credentials
 ```
 
-`![Stage 3 decoded credentials](docs/evidence/stage3-decode.png)`
+![Stage 3 decoded credentials](docs/evidence/stage3-decode.png)
 
 That screenshot shows the base64 decode landing on `payments_admin` and the real password, pulled from a namespace this app had zero legitimate reason to touch. A workload with no reason to read secrets at all just read another team's database credentials, purely because of how the RBAC was scoped.
 
@@ -133,11 +133,11 @@ Falco caught the shell spawn the second I exec'd in, and flagged the outbound AP
 
 **Stage 5, prevention.** Terminal output of `kubectl apply` cleanly rejecting both the original vulnerable Deployment and a freshly created ClusterRole with the same bad rule structure, citing the exact policies it violated.
 
-`![Stage 5 Kyverno blocking evidence](docs/evidence/stage5-kyverno-block.png)`
+![Stage 5 Kyverno blocking evidence](docs/evidence/stage5-kyverno-block.png)
 
 **Stage 6, CI/CD gate.** All three jobs passing together on the same commit, `policy-gate`, `policy-regression-test`, and `image-scan`.
 
-`![Stage 6 pipeline green](docs/evidence/stage6-pipeline-green.png)`
+![Stage 6 pipeline green](docs/evidence/stage6-pipeline-green.png)
 
 
 ## How to Run This Locally
