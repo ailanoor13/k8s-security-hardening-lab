@@ -139,7 +139,6 @@ Falco caught the shell spawn the second I exec'd in, and flagged the outbound AP
 
 `![Stage 6 pipeline green](docs/evidence/stage6-pipeline-green.png)`
 
-> Evidence images are not embedded yet in this draft. Drop them into `docs/evidence/` with the filenames above and the paths will resolve.
 
 ## How to Run This Locally
 
