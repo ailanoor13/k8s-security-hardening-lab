@@ -1,0 +1,76 @@
+# This is the CORRECTED version of the Stage 2 vulnerable app.
+# Every issue from Stage 2 is fixed here:
+#   - RBAC scoped to a namespaced Role instead of a cluster-wide ClusterRole
+#   - Container explicitly runs as non-root
+#   - Resource limits set
+# This is what the CI pipeline validates on every push, and what should
+# actually be allowed to reach the cluster.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webapp-sa
+  namespace: vulnerable-app
+
+---
+# Namespace-scoped Role, not a ClusterRole - can only read secrets inside
+# its OWN namespace, not cluster-wide. This alone would have prevented
+# the Stage 3 exploit.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: webapp-scoped-role
+  namespace: vulnerable-app
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames: ["webapp-own-secret"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: webapp-scoped-binding
+  namespace: vulnerable-app
+subjects:
+  - kind: ServiceAccount
+    name: webapp-sa
+    namespace: vulnerable-app
+roleRef:
+  kind: Role
+  name: webapp-scoped-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-fixed
+  namespace: vulnerable-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapp-fixed
+  template:
+    metadata:
+      labels:
+        app: webapp-fixed
+    spec:
+      serviceAccountName: webapp-sa
+      containers:
+        - name: webapp
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+            requests:
+              memory: "64Mi"
+              cpu: "100m"

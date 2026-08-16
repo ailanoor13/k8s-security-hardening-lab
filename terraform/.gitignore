@@ -8,3 +8,5 @@ crash.*.log
 *.pem
 *.pub
 terraform.tfvars.save
+terraform.tfvars.*
+!terraform.tfvars.example

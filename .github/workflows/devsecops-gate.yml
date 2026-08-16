@@ -1,0 +1,78 @@
+name: DevSecOps Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  # Job 1: the REAL gate. Validates the fixed, compliant manifests against
+  # our Kyverno policies. This should PASS - it's what proves a legitimate
+  # deployment is allowed through.
+  policy-gate:
+    name: Validate compliant manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Kyverno CLI
+        run: |
+          KYVERNO_VERSION=$(curl -s https://api.github.com/repos/kyverno/kyverno/releases/latest | grep tag_name | cut -d '"' -f4)
+          curl -LO "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz"
+          tar -xzf "kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz"
+          sudo mv kyverno /usr/local/bin/
+          kyverno version
+
+      - name: Validate fixed manifests against security policies
+        run: |
+          kyverno apply manifests/stage5/*.yaml --resource manifests/fixed/webapp-fixed.yaml
+
+  # Job 2: a regression test on the policies themselves. Runs the SAME
+  # policies against the known-bad Stage 2 manifests and asserts they get
+  # REJECTED. If this ever stops failing, it means our policies silently
+  # broke - so a "failure" from kyverno here is actually a PASS for this job.
+  policy-regression-test:
+    name: Confirm policies still block known-vulnerable config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Kyverno CLI
+        run: |
+          KYVERNO_VERSION=$(curl -s https://api.github.com/repos/kyverno/kyverno/releases/latest | grep tag_name | cut -d '"' -f4)
+          curl -LO "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz"
+          tar -xzf "kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz"
+          sudo mv kyverno /usr/local/bin/
+          kyverno version
+
+      - name: Assert the known-vulnerable manifest is still blocked
+        run: |
+          if kyverno apply manifests/stage5/*.yaml --resource manifests/stage2/03-vulnerable-deployment.yaml; then
+            echo "FAIL: the known-vulnerable manifest was allowed through. A policy has regressed."
+            exit 1
+          else
+            echo "PASS: the known-vulnerable manifest was correctly rejected."
+            exit 0
+          fi
+
+  # Job 3: image vulnerability scanning with Trivy. Fails only on CRITICAL
+  # severity findings, to keep the pipeline stable while still catching
+  # anything genuinely serious.
+  image-scan:
+    name: Scan container image for vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: "nginx:alpine"
+          severity: "CRITICAL"
+          exit-code: "1"
+          format: "table"
